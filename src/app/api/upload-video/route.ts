@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// Allow up to 5 minutes for large video uploads (Vercel: up to 300s on Pro plan)
+export const maxDuration = 300;
+
 export async function POST(request: Request) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -76,8 +79,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, video: dbData });
 
-  } catch (error) {
-    console.error("Upload handler error:", error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Upload handler error:", message);
+    // Surface clearer error if the payload was too large
+    if (message.includes("413") || message.toLowerCase().includes("too large") || message.toLowerCase().includes("payload")) {
+      return NextResponse.json({ error: "Video file is too large. Please upload a smaller file." }, { status: 413 });
+    }
     return NextResponse.json({ error: "Internal server error during upload" }, { status: 500 });
   }
 }

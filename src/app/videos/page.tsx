@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import useSWR from "swr";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, X, Play, Video as VideoIcon, PlusCircle, CheckCircle2, AlertCircle } from "lucide-react";
+import { Upload, X, Play, Video as VideoIcon, PlusCircle, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
 
 type VideoRecord = {
   id: string;
@@ -12,6 +12,7 @@ type VideoRecord = {
   uploader: string;
   description: string;
   public_url: string;
+  storage_path: string;
 };
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -21,6 +22,48 @@ export default function VideosPage() {
   
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<VideoRecord | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const handleDelete = async () => {
+    if (!selectedVideo) return;
+    setIsDeleting(true);
+    setDeleteError("");
+
+    const deletedId = selectedVideo.id;
+
+    // Optimistically remove the video from the cache immediately
+    mutate(
+      (current) => current
+        ? { videos: current.videos.filter((v) => v.id !== deletedId) }
+        : current,
+      { revalidate: false }
+    );
+
+    // Close modal right away — no waiting
+    setSelectedVideo(null);
+    setConfirmDelete(false);
+    setIsDeleting(false);
+
+    // Fire the actual delete in the background
+    try {
+      const res = await fetch("/api/delete-video", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: deletedId, storage_path: selectedVideo.storage_path }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Delete failed");
+      // Revalidate to sync with server (runs silently in background)
+      mutate();
+    } catch (err: unknown) {
+      // Rollback: re-fetch the real list and surface the error
+      mutate();
+      const msg = err instanceof Error ? err.message : "An error occurred.";
+      console.error("Delete failed, rolled back:", msg);
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -129,13 +172,49 @@ export default function VideosPage() {
             >
               <div className="p-4 flex items-center justify-between border-b border-white/10 bg-black/50">
                 <h3 className="font-bold truncate pr-4">{selectedVideo.title}</h3>
-                <button 
-                  onClick={() => setSelectedVideo(null)}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors shrink-0"
-                >
-                  <X size={20} />
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Delete button */}
+                  {!confirmDelete ? (
+                    <button
+                      onClick={() => { setConfirmDelete(true); setDeleteError(""); }}
+                      className="p-2 hover:bg-red-500/20 text-white/50 hover:text-red-400 rounded-full transition-colors"
+                      title="Delete video"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-1.5">
+                      <span className="text-sm text-red-300 font-medium">Delete?</span>
+                      <button
+                        onClick={handleDelete}
+                        disabled={isDeleting}
+                        className="text-xs bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white px-2.5 py-1 rounded-lg font-medium transition-colors"
+                      >
+                        {isDeleting ? "Deleting…" : "Yes"}
+                      </button>
+                      <button
+                        onClick={() => { setConfirmDelete(false); setDeleteError(""); }}
+                        disabled={isDeleting}
+                        className="text-xs text-white/50 hover:text-white px-1.5 py-1 rounded-lg transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  )}
+                  <button 
+                    onClick={() => { setSelectedVideo(null); setConfirmDelete(false); setDeleteError(""); }}
+                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
+              {deleteError && (
+                <div className="px-4 py-2 bg-red-500/10 border-b border-red-500/20 text-sm text-red-400 flex items-center gap-2">
+                  <AlertCircle size={14} className="shrink-0" />
+                  {deleteError}
+                </div>
+              )}
               <div className="flex-1 bg-black flex items-center justify-center shrink-0">
                 <video 
                   src={selectedVideo.public_url} 
@@ -210,44 +289,53 @@ function UploadPanel({ onSuccess }: { onSuccess: () => void }) {
 
     setIsUploading(true);
     setError("");
-    setProgress(10); // Start progress
+    setProgress(0);
 
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("title", title);
-      formData.append("uploader", uploader);
-      formData.append("description", description);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("title", title);
+    formData.append("uploader", uploader);
+    formData.append("description", description);
 
-      // Simulate progress since fetch doesn't give upload progress natively easily
-      const progressInterval = setInterval(() => {
-        setProgress(p => Math.min(p + 5, 90));
-      }, 500);
+    // Use XHR instead of fetch to get real upload progress events
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
 
-      const response = await fetch("/api/upload-video", {
-        method: "POST",
-        body: formData,
-      });
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const pct = Math.round((event.loaded / event.total) * 95);
+          setProgress(pct);
+        }
+      };
 
-      clearInterval(progressInterval);
-      setProgress(100);
+      xhr.onload = () => {
+        setProgress(100);
+        try {
+          const result = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            setSuccess(true);
+            setTimeout(() => { onSuccess(); }, 1500);
+            resolve();
+          } else {
+            const msg = result?.error || `Upload failed (${xhr.status})`;
+            reject(new Error(msg));
+          }
+        } catch {
+          reject(new Error(`Unexpected server response (${xhr.status})`));
+        }
+      };
 
-      const result = await response.json();
+      xhr.onerror = () => reject(new Error("Network error — check your connection and try again."));
+      xhr.ontimeout = () => reject(new Error("Upload timed out. Try a smaller file or check your connection."));
+      xhr.timeout = 10 * 60 * 1000; // 10 minutes
 
-      if (!response.ok) {
-        throw new Error(result.error || "Upload failed");
-      }
-
-      setSuccess(true);
-      setTimeout(() => {
-        onSuccess();
-      }, 1500);
-
-    } catch (err: any) {
+      xhr.open("POST", "/api/upload-video");
+      xhr.send(formData);
+    }).catch((err: Error) => {
       setError(err.message || "An error occurred during upload.");
       setIsUploading(false);
       setProgress(0);
-    }
+    });
   };
 
   return (
