@@ -25,6 +25,7 @@ export default function VideosPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [autoplayNext, setAutoplayNext] = useState(false);
 
   const handleDelete = async () => {
     if (!selectedVideo) return;
@@ -65,6 +66,15 @@ export default function VideosPage() {
     }
   };
 
+  const handleVideoEnd = () => {
+    if (!autoplayNext || !data?.videos || !selectedVideo) return;
+    const currentIndex = data.videos.findIndex((v) => v.id === selectedVideo.id);
+    if (currentIndex !== -1) {
+      const nextIndex = (currentIndex + 1) % data.videos.length;
+      setSelectedVideo(data.videos[nextIndex]);
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
@@ -73,13 +83,27 @@ export default function VideosPage() {
           <p className="text-white/60">See what others are building with Buildex</p>
         </div>
         
-        <button
-          onClick={() => setIsUploadOpen(!isUploadOpen)}
-          className="px-6 py-3 bg-primary hover:bg-primary/90 text-white rounded-xl font-medium flex items-center gap-2 transition-colors w-full md:w-auto justify-center"
-        >
-          {isUploadOpen ? <X size={20} /> : <Upload size={20} />}
-          {isUploadOpen ? "Close Upload" : "Upload Video"}
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          {data?.videos && data.videos.length > 0 && (
+            <button
+              onClick={() => {
+                setAutoplayNext(true);
+                setSelectedVideo(data.videos[0]);
+              }}
+              className="px-6 py-3 glass hover:bg-white/10 text-white rounded-xl font-medium flex items-center gap-2 transition-colors w-full sm:w-auto justify-center shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+            >
+              <Play size={20} className="fill-white" />
+              Play All
+            </button>
+          )}
+          <button
+            onClick={() => setIsUploadOpen(!isUploadOpen)}
+            className="px-6 py-3 bg-primary hover:bg-primary/90 text-white rounded-xl font-medium flex items-center gap-2 transition-colors w-full sm:w-auto justify-center"
+          >
+            {isUploadOpen ? <X size={20} /> : <Upload size={20} />}
+            {isUploadOpen ? "Close Upload" : "Upload Video"}
+          </button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -173,6 +197,16 @@ export default function VideosPage() {
               <div className="p-4 flex items-center justify-between border-b border-white/10 bg-black/50">
                 <h3 className="font-bold truncate pr-4">{selectedVideo.title}</h3>
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* Autoplay Toggle */}
+                  <label className="hidden sm:flex items-center gap-2 cursor-pointer group mr-2 bg-white/5 px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors">
+                    <input 
+                      type="checkbox" 
+                      checked={autoplayNext} 
+                      onChange={(e) => setAutoplayNext(e.target.checked)} 
+                      className="w-4 h-4 rounded border-white/20 bg-black/50 text-primary focus:ring-primary/50 focus:ring-offset-0 cursor-pointer"
+                    />
+                    <span className="text-sm font-medium text-white/80 group-hover:text-white transition-colors">Autoplay</span>
+                  </label>
                   {/* Delete button */}
                   {!confirmDelete ? (
                     <button
@@ -220,6 +254,7 @@ export default function VideosPage() {
                   src={selectedVideo.public_url} 
                   controls 
                   autoPlay 
+                  onEnded={handleVideoEnd}
                   className="w-full max-h-[60vh]"
                 />
               </div>
