@@ -14,6 +14,12 @@ export const metadata: Metadata = {
   description: "An interactive AI-powered IDE that teaches you to code — step by step, concept by concept.",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{

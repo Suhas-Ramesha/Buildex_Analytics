@@ -34,7 +34,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-tight"
+            className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-tight"
           >
             AI that helps you <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-indigo-400">build</span>, not copy
           </motion.h1>

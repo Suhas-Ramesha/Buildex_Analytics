@@ -67,16 +67,18 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-100px)] w-full max-w-[1920px] mx-auto px-4 py-2 flex flex-col overflow-hidden pb-4">
+    // Mobile: full scrollable page. Desktop (lg+): fixed viewport dashboard
+    <div className="w-full max-w-[1920px] mx-auto px-4 py-4
+                    lg:h-[calc(100vh-100px)] lg:flex lg:flex-col lg:overflow-hidden lg:pb-4">
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 shrink-0">
+      <div className="flex items-center justify-between mb-4 shrink-0 flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Live Analytics Dashboard</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Live Analytics Dashboard</h1>
           <p className="text-primary/80 text-sm font-medium">Real-time data from Google Forms</p>
         </div>
-        
         <div className="flex items-center gap-3 text-xs bg-white/5 border border-white/10 p-1.5 pr-4 rounded-full backdrop-blur-md">
-          <button 
+          <button
             onClick={() => { mutate(); setTimeAgo("Just now"); }}
             className="w-8 h-8 flex items-center justify-center bg-primary/20 hover:bg-primary/40 text-primary rounded-full transition-colors"
             title="Refresh now"
@@ -85,50 +87,50 @@ export default function AnalyticsPage() {
             <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
           </button>
           <span className="text-white/60 font-medium">
-            {isLoading ? "Updating live feed..." : `Last updated: ${timeAgo}`}
+            {isLoading ? "Updating..." : `Updated: ${timeAgo}`}
           </span>
         </div>
       </div>
 
       {!data && isLoading ? (
-        <div className="flex-1 flex gap-4 min-h-0">
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
-          </div>
+        <div className="flex-1 flex items-center justify-center py-24">
+          <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
         </div>
       ) : data ? (
-        <div className="flex-1 flex gap-5 min-h-0 w-full">
-          
-          {/* Main Dashboard Area (Left 75%) */}
-          <div className="w-[75%] flex flex-col gap-5 min-h-0">
-            
-            {/* Top Row: Stats (20% height approx) */}
-            <div className="grid grid-cols-3 gap-5 shrink-0">
-              <StatCard 
-                title="Total Responses" 
-                value={data.totalResponses} 
-                icon={<Users className="text-indigo-400" />} 
+        // ── MOBILE: single column, scrollable ──────────────────────────────
+        // ── DESKTOP (lg+): two-column fixed-height layout ──────────────────
+        <div className="flex flex-col gap-5 lg:flex-1 lg:flex lg:flex-row lg:min-h-0">
+
+          {/* ── Left / Main column ── */}
+          <div className="flex flex-col gap-5 lg:w-[75%] lg:min-h-0">
+
+            {/* Stat cards */}
+            <div className="grid grid-cols-3 gap-3 sm:gap-5 shrink-0">
+              <StatCard
+                title="Total Responses"
+                value={data.totalResponses}
+                icon={<Users className="text-indigo-400" />}
                 gradient="from-indigo-500/10 to-transparent"
               />
-              <StatCard 
-                title="Average Rating" 
-                value={data.averageRating} 
+              <StatCard
+                title="Avg Rating"
+                value={data.averageRating}
                 suffix="/ 5"
-                icon={<Star className="text-yellow-400 fill-yellow-400/20" />} 
+                icon={<Star className="text-yellow-400 fill-yellow-400/20" />}
                 gradient="from-yellow-500/10 to-transparent"
               />
-              <StatCard 
-                title="Would Use It" 
-                value={data.wouldUsePercentage} 
+              <StatCard
+                title="Would Use"
+                value={data.wouldUsePercentage}
                 suffix="%"
-                icon={<ThumbsUp className="text-emerald-400" />} 
+                icon={<ThumbsUp className="text-emerald-400" />}
                 gradient="from-emerald-500/10 to-transparent"
               />
             </div>
 
-            {/* Middle Row: Rating & Concept Clarity (40% height) */}
-            <div className="flex-1 flex gap-5 min-h-0">
-              <div className="w-1/2 min-h-0 h-full">
+            {/* Rating & Concept Clarity */}
+            <div className="flex flex-col sm:flex-row gap-5 lg:flex-1 lg:min-h-0">
+              <div className="h-64 sm:h-auto sm:flex-1 lg:w-1/2 lg:min-h-0 lg:h-full">
                 <ChartCard title="Rating Distribution">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data.ratingDistribution} margin={{ top: 25, right: 20, left: -20, bottom: 0 }}>
@@ -143,7 +145,7 @@ export default function AnalyticsPage() {
                   </ResponsiveContainer>
                 </ChartCard>
               </div>
-              <div className="w-1/2 min-h-0 h-full">
+              <div className="h-64 sm:h-auto sm:flex-1 lg:w-1/2 lg:min-h-0 lg:h-full">
                 <ChartCard title="Concept Clarity">
                   <div className="w-full h-full flex flex-col justify-center gap-5 px-2">
                     {data.conceptClarity.map((item, i) => {
@@ -153,20 +155,20 @@ export default function AnalyticsPage() {
                         <div key={i} className="w-full group">
                           <div className="flex justify-between items-end mb-2">
                             <span className="text-white/90 text-sm font-bold flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>
+                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>
                               {item.name}
                             </span>
-                            <span className="text-white/50 text-xs font-semibold">{item.value} <span className="font-normal text-[10px] ml-0.5">votes</span> ({percent}%)</span>
+                            <span className="text-white/50 text-xs font-semibold">{item.value} <span className="font-normal text-[10px]">votes</span> ({percent}%)</span>
                           </div>
                           <div className="w-full h-3 bg-black/40 rounded-full overflow-hidden border border-white/5">
-                            <motion.div 
+                            <motion.div
                               initial={{ width: 0 }}
                               animate={{ width: `${percent}%` }}
                               transition={{ duration: 1, ease: "easeOut" }}
                               className="h-full rounded-full relative"
                               style={{ backgroundColor: COLORS[i % COLORS.length] }}
                             >
-                              <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/20"></div>
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/20" />
                             </motion.div>
                           </div>
                         </div>
@@ -177,33 +179,33 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            {/* Bottom Row: Standout & Future Features (40% height) */}
-            <div className="flex-1 flex gap-5 min-h-0">
-              <div className="w-1/2 min-h-0 h-full">
+            {/* Standout & Future Features */}
+            <div className="flex flex-col sm:flex-row gap-5 lg:flex-1 lg:min-h-0">
+              <div className="h-72 sm:h-auto sm:flex-1 lg:w-1/2 lg:min-h-0 lg:h-full">
                 <ChartCard title="Standout Features">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data.standoutFeatures} layout="vertical" margin={{ top: 10, right: 40, left: 20, bottom: 0 }}>
+                    <BarChart data={data.standoutFeatures} layout="vertical" margin={{ top: 10, right: 40, left: 10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />
-                      <XAxis type="number" tick={{ fill: '#ffffff90', fontSize: 13, fontWeight: 'bold' }} tickLine={false} axisLine={false} allowDecimals={false} />
-                      <YAxis dataKey="name" type="category" width={140} tick={{ fill: '#ffffff', fontSize: 14, fontWeight: 'bold' }} tickLine={false} axisLine={false} />
+                      <XAxis type="number" tick={{ fill: '#ffffff90', fontSize: 12, fontWeight: 'bold' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <YAxis dataKey="name" type="category" width={110} tick={{ fill: '#ffffff', fontSize: 12, fontWeight: 'bold' }} tickLine={false} axisLine={false} />
                       <Tooltip content={<CustomTooltip />} cursor={{ fill: '#ffffff0a' }} />
-                      <Bar dataKey="count" fill="#4F35D2" radius={[0, 6, 6, 0]} barSize={24}>
-                        <LabelList dataKey="count" position="right" fill="#ffffff" fontSize={14} fontWeight="bold" />
+                      <Bar dataKey="count" fill="#4F35D2" radius={[0, 6, 6, 0]} barSize={20}>
+                        <LabelList dataKey="count" position="right" fill="#ffffff" fontSize={13} fontWeight="bold" />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartCard>
               </div>
-              <div className="w-1/2 min-h-0 h-full">
-                <ChartCard title="Most Exciting Future Features">
+              <div className="h-72 sm:h-auto sm:flex-1 lg:w-1/2 lg:min-h-0 lg:h-full">
+                <ChartCard title="Exciting Future Features">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data.futureFeatures} layout="vertical" margin={{ top: 10, right: 40, left: 30, bottom: 0 }}>
+                    <BarChart data={data.futureFeatures} layout="vertical" margin={{ top: 10, right: 40, left: 10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />
-                      <XAxis type="number" tick={{ fill: '#ffffff90', fontSize: 13, fontWeight: 'bold' }} tickLine={false} axisLine={false} allowDecimals={false} />
-                      <YAxis dataKey="name" type="category" width={150} tick={{ fill: '#ffffff', fontSize: 14, fontWeight: 'bold' }} tickLine={false} axisLine={false} />
+                      <XAxis type="number" tick={{ fill: '#ffffff90', fontSize: 12, fontWeight: 'bold' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <YAxis dataKey="name" type="category" width={110} tick={{ fill: '#ffffff', fontSize: 12, fontWeight: 'bold' }} tickLine={false} axisLine={false} />
                       <Tooltip content={<CustomTooltip />} cursor={{ fill: '#ffffff0a' }} />
-                      <Bar dataKey="count" fill="#D946EF" radius={[0, 6, 6, 0]} barSize={24}>
-                        <LabelList dataKey="count" position="right" fill="#ffffff" fontSize={14} fontWeight="bold" />
+                      <Bar dataKey="count" fill="#D946EF" radius={[0, 6, 6, 0]} barSize={20}>
+                        <LabelList dataKey="count" position="right" fill="#ffffff" fontSize={13} fontWeight="bold" />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -213,11 +215,11 @@ export default function AnalyticsPage() {
 
           </div>
 
-          {/* Sidebar Area (Right 25%) */}
-          <div className="w-[25%] flex flex-col gap-5 min-h-0 shrink-0">
-            
-            {/* Would You Use It (Pie Chart) */}
-            <div className="h-[35%] shrink-0 min-h-0">
+          {/* ── Right / Sidebar column ── */}
+          <div className="flex flex-col gap-5 lg:w-[25%] lg:min-h-0 lg:shrink-0">
+
+            {/* Would You Use It */}
+            <div className="h-64 lg:h-[35%] lg:shrink-0 lg:min-h-0">
               <ChartCard title="Would You Use It?">
                 <div className="w-full h-full flex flex-col justify-center gap-6 px-2">
                   {data.wouldUseIt.map((item, i) => {
@@ -227,20 +229,20 @@ export default function AnalyticsPage() {
                       <div key={i} className="w-full group">
                         <div className="flex justify-between items-end mb-2">
                           <span className="text-white/90 text-sm font-bold flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: COLORS[(i + 2) % COLORS.length] }}></span>
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[(i + 2) % COLORS.length] }}></span>
                             {item.name}
                           </span>
-                          <span className="text-white/50 text-xs font-semibold">{item.value} <span className="font-normal text-[10px] ml-0.5">votes</span> ({percent}%)</span>
+                          <span className="text-white/50 text-xs font-semibold">{item.value} <span className="font-normal text-[10px]">votes</span> ({percent}%)</span>
                         </div>
                         <div className="w-full h-4 bg-black/40 rounded-full overflow-hidden border border-white/5">
-                          <motion.div 
+                          <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${percent}%` }}
                             transition={{ duration: 1, ease: "easeOut", delay: i * 0.1 }}
                             className="h-full rounded-full relative"
                             style={{ backgroundColor: COLORS[(i + 2) % COLORS.length] }}
                           >
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/20"></div>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/20" />
                           </motion.div>
                         </div>
                       </div>
@@ -250,17 +252,15 @@ export default function AnalyticsPage() {
               </ChartCard>
             </div>
 
-            {/* Suggestions Feed */}
-            <div className="flex-1 glass p-5 flex flex-col min-h-0 overflow-hidden relative">
+            {/* Live Feedback — fixed height on mobile, flex-1 on desktop */}
+            <div className="h-80 lg:flex-1 glass p-5 flex flex-col lg:min-h-0 overflow-hidden relative">
               <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#0A0A0F]/80 to-transparent pointer-events-none z-10 rounded-t-2xl" />
-              
               <div className="flex items-center gap-3 mb-4 shrink-0 relative z-20">
                 <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
                   <MessageSquare size={16} />
                 </div>
                 <h3 className="text-lg font-bold text-white tracking-tight">Live Feedback</h3>
               </div>
-              
               <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar relative z-0 pb-4">
                 <AnimatePresence>
                   {data.suggestions.length > 0 ? (
@@ -291,7 +291,6 @@ export default function AnalyticsPage() {
             </div>
 
           </div>
-
         </div>
       ) : null}
     </div>
@@ -304,10 +303,10 @@ function StatCard({ title, value, suffix = "", icon, gradient }: { title: string
       <div className="absolute top-1/2 -translate-y-1/2 right-6 opacity-20 group-hover:opacity-40 group-hover:scale-110 transition-all duration-500 pointer-events-none">
         <div className="w-16 h-16 [&>svg]:w-full [&>svg]:h-full drop-shadow-2xl">{icon}</div>
       </div>
-      <h3 className="text-white/50 text-xs font-bold mb-2 uppercase tracking-widest">{title}</h3>
+      <h3 className="text-white/50 text-[10px] sm:text-xs font-bold mb-1 sm:mb-2 uppercase tracking-widest">{title}</h3>
       <div className="flex items-baseline gap-1 relative z-10">
-        <span className="text-5xl font-black text-white tracking-tighter drop-shadow-md">{value}</span>
-        {suffix && <span className="text-xl font-bold text-white/50">{suffix}</span>}
+        <span className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter drop-shadow-md">{value}</span>
+        {suffix && <span className="text-sm sm:text-lg lg:text-xl font-bold text-white/50">{suffix}</span>}
       </div>
     </div>
   );
