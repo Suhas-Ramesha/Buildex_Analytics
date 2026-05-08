@@ -1,4 +1,4 @@
-# Buildex — The AI-Powered Learning IDE
+#  Buildex — The AI-Powered Learning IDE
 
 Buildex is a complete, production-ready full-stack web application designed for a modern AI-powered learning platform. It features a stunning landing page, a real-time analytics dashboard powered by Google Sheets, and a dynamic video showcase wall backed by Supabase.
 
