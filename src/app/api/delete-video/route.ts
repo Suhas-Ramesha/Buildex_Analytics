@@ -19,24 +19,27 @@ export async function DELETE(request: Request) {
 
     const { id, storage_path } = await request.json();
 
-    if (!id || !storage_path) {
+    if (!id) {
       return NextResponse.json(
-        { error: "Missing required fields: id, storage_path" },
+        { error: "Missing required field: id" },
         { status: 400 }
       );
     }
 
-    // 1. Remove file from Supabase Storage
-    const { error: storageError } = await supabase.storage
-      .from("project-videos")
-      .remove([storage_path]);
+    // 1. Only remove from Supabase Storage if there is a storage file
+    //    (YouTube/Vimeo embedded videos have no storage file)
+    if (storage_path) {
+      const { error: storageError } = await supabase.storage
+        .from("project-videos")
+        .remove([storage_path]);
 
-    if (storageError) {
-      console.error("Storage delete error:", storageError);
-      return NextResponse.json(
-        { error: "Failed to delete video file from storage" },
-        { status: 500 }
-      );
+      if (storageError) {
+        console.error("Storage delete error:", storageError);
+        return NextResponse.json(
+          { error: "Failed to delete video file from storage" },
+          { status: 500 }
+        );
+      }
     }
 
     // 2. Delete metadata row from database
