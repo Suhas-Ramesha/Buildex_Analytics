@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import useSWR from "swr";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, X, Play, Video as VideoIcon, PlusCircle, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 
 type VideoRecord = {
   id: string;
@@ -322,17 +323,24 @@ function UploadPanel({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      setError("Supabase configuration is missing in environment variables.");
+      return;
+    }
+
     setIsUploading(true);
     setError("");
     setProgress(0);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("title", title);
-    formData.append("uploader", uploader);
-    formData.append("description", description);
+    // Prepare direct upload to Supabase Storage
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+    const storagePath = `uploads/${fileName}`;
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/project-videos/${storagePath}`;
 
-    // Use XHR instead of fetch to get real upload progress events
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
 
@@ -343,29 +351,52 @@ function UploadPanel({ onSuccess }: { onSuccess: () => void }) {
         }
       };
 
-      xhr.onload = () => {
-        setProgress(100);
-        try {
-          const result = JSON.parse(xhr.responseText);
-          if (xhr.status >= 200 && xhr.status < 300) {
+      xhr.onload = async () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            // File uploaded successfully, now insert the metadata
+            const supabase = createClient(supabaseUrl, supabaseAnonKey);
+            const { data: publicUrlData } = supabase.storage.from("project-videos").getPublicUrl(storagePath);
+            
+            const { error: dbError } = await supabase.from("videos").insert([{
+              title,
+              uploader,
+              description,
+              storage_path: storagePath,
+              public_url: publicUrlData.publicUrl
+            }]);
+
+            if (dbError) {
+              throw new Error("Video uploaded, but failed to save video details.");
+            }
+
+            setProgress(100);
             setSuccess(true);
             setTimeout(() => { onSuccess(); }, 1500);
             resolve();
-          } else {
-            const msg = result?.error || `Upload failed (${xhr.status})`;
-            reject(new Error(msg));
+          } catch (err: any) {
+            reject(new Error(err.message || "Failed to process video metadata."));
           }
-        } catch {
-          reject(new Error(`Unexpected server response (${xhr.status})`));
+        } else {
+          try {
+            const result = JSON.parse(xhr.responseText);
+            reject(new Error(result?.message || result?.error || `Upload failed (${xhr.status})`));
+          } catch {
+            reject(new Error(`Unexpected server response (${xhr.status})`));
+          }
         }
       };
 
       xhr.onerror = () => reject(new Error("Network error — check your connection and try again."));
       xhr.ontimeout = () => reject(new Error("Upload timed out. Try a smaller file or check your connection."));
-      xhr.timeout = 10 * 60 * 1000; // 10 minutes
+      xhr.timeout = 30 * 60 * 1000; // 30 minutes for large files
 
-      xhr.open("POST", "/api/upload-video");
-      xhr.send(formData);
+      xhr.open("POST", uploadUrl);
+      xhr.setRequestHeader("Authorization", `Bearer ${supabaseAnonKey}`);
+      xhr.setRequestHeader("apikey", supabaseAnonKey);
+      xhr.setRequestHeader("Content-Type", file.type);
+      // Send the raw file directly to bypass Next.js API and Vercel limits
+      xhr.send(file);
     }).catch((err: Error) => {
       setError(err.message || "An error occurred during upload.");
       setIsUploading(false);
