@@ -132,7 +132,7 @@ export default function AnalyticsPage() {
             <div className="flex flex-col sm:flex-row gap-5 lg:flex-1 lg:min-h-0">
               <div className="h-64 sm:h-auto sm:flex-1 lg:w-1/2 lg:min-h-0 lg:h-full">
                 <ChartCard title="Rating Distribution">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart data={data.ratingDistribution} margin={{ top: 25, right: 20, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                       <XAxis dataKey="rating" tick={{ fill: '#ffffff', fontSize: 14, fontWeight: 'bold' }} tickLine={false} axisLine={false} />
@@ -183,7 +183,7 @@ export default function AnalyticsPage() {
             <div className="flex flex-col sm:flex-row gap-5 lg:flex-1 lg:min-h-0">
               <div className="h-72 sm:h-auto sm:flex-1 lg:w-1/2 lg:min-h-0 lg:h-full">
                 <ChartCard title="Standout Features">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart data={data.standoutFeatures} layout="vertical" margin={{ top: 10, right: 40, left: 10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />
                       <XAxis type="number" tick={{ fill: '#ffffff90', fontSize: 12, fontWeight: 'bold' }} tickLine={false} axisLine={false} allowDecimals={false} />
@@ -198,7 +198,7 @@ export default function AnalyticsPage() {
               </div>
               <div className="h-72 sm:h-auto sm:flex-1 lg:w-1/2 lg:min-h-0 lg:h-full">
                 <ChartCard title="Exciting Future Features">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart data={data.futureFeatures} layout="vertical" margin={{ top: 10, right: 40, left: 10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={false} />
                       <XAxis type="number" tick={{ fill: '#ffffff90', fontSize: 12, fontWeight: 'bold' }} tickLine={false} axisLine={false} allowDecimals={false} />
@@ -221,7 +221,7 @@ export default function AnalyticsPage() {
             {/* Would You Use It */}
             <div className="h-64 lg:h-[35%] lg:shrink-0 lg:min-h-0">
               <ChartCard title="Would You Use It?">
-                <div className="w-full h-full flex flex-col justify-center gap-6 px-2">
+                <div className="w-full h-full flex flex-col justify-center gap-4 px-2 py-2 overflow-y-auto overflow-x-hidden custom-scrollbar">
                   {data.wouldUseIt.map((item, i) => {
                     const total = data.wouldUseIt.reduce((acc, curr) => acc + curr.value, 0) || 1;
                     const percent = Math.round((item.value / total) * 100);
@@ -319,7 +319,7 @@ function ChartCard({ title, children, className = "" }: { title: string, childre
         <span className="w-1.5 h-1.5 rounded-full bg-primary/80"></span>
         {title}
       </h3>
-      <div className="flex-1 min-h-0 relative w-full h-full">
+      <div className="flex-1 min-h-0 relative w-full h-full overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
           {children}
         </div>
