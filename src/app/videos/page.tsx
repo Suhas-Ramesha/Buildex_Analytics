@@ -295,9 +295,9 @@ function UploadPanel({ onSuccess }: { onSuccess: () => void }) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
-      // Max 500MB
-      if (selected.size > 500 * 1024 * 1024) {
-        setError("File size exceeds 500MB limit.");
+      // Max 50MB (Supabase Free Tier Limit)
+      if (selected.size > 50 * 1024 * 1024) {
+        setError("File size exceeds 50MB limit (Supabase Free Tier maximum). Please compress your video or upgrade your database plan.");
         return;
       }
       
@@ -456,7 +456,7 @@ function UploadPanel({ onSuccess }: { onSuccess: () => void }) {
                 <>
                   <PlusCircle className="w-12 h-12 text-white/20 mb-4" />
                   <p className="font-medium text-white mb-1">Click to select video</p>
-                  <p className="text-sm text-white/50">MP4, WebM, MOV up to 500MB</p>
+                  <p className="text-sm text-white/50">MP4, WebM, MOV up to 50MB</p>
                 </>
               )}
             </div>

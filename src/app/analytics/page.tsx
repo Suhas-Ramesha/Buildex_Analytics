@@ -221,7 +221,7 @@ export default function AnalyticsPage() {
             {/* Would You Use It */}
             <div className="h-64 lg:h-[35%] lg:shrink-0 lg:min-h-0">
               <ChartCard title="Would You Use It?">
-                <div className="w-full h-full flex flex-col justify-center gap-4 px-2 py-2 overflow-y-auto overflow-x-hidden custom-scrollbar">
+                <div className="w-full flex flex-col justify-start gap-4 px-2 py-2 overflow-y-auto overflow-x-hidden custom-scrollbar h-full">
                   {data.wouldUseIt.map((item, i) => {
                     const total = data.wouldUseIt.reduce((acc, curr) => acc + curr.value, 0) || 1;
                     const percent = Math.round((item.value / total) * 100);
@@ -320,7 +320,7 @@ function ChartCard({ title, children, className = "" }: { title: string, childre
         {title}
       </h3>
       <div className="flex-1 min-h-0 relative w-full h-full overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 overflow-y-auto overflow-x-hidden">
           {children}
         </div>
       </div>
