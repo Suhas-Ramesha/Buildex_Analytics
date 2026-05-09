@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import useSWR from "swr";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Play, Video as VideoIcon, CheckCircle2, AlertCircle, Trash2, Link as LinkIcon, Youtube, PlusCircle } from "lucide-react";
+import { X, Play, Video as VideoIcon, CheckCircle2, AlertCircle, Trash2, Link as LinkIcon, PlaySquare, PlusCircle, Upload } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
 type VideoRecord = {
@@ -186,6 +186,12 @@ export default function VideosPage() {
                       alt={video.title}
                       className="w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
                     />
+                  ) : video.public_url ? (
+                    <video
+                      src={`${video.public_url}#t=0.1`}
+                      className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
+                      preload="metadata"
+                    />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-primary/20 to-indigo-900/30 flex items-center justify-center">
                       <VideoIcon size={40} className="text-white/20" />
@@ -200,7 +206,7 @@ export default function VideosPage() {
                   {/* YouTube badge */}
                   {(video.video_url || video.public_url || "").includes("youtube") && (
                     <div className="absolute top-2 right-2 bg-red-600/90 backdrop-blur-sm rounded-md px-2 py-0.5 flex items-center gap-1">
-                      <Youtube size={12} />
+                      <PlaySquare size={12} />
                       <span className="text-[10px] font-bold">YouTube</span>
                     </div>
                   )}
@@ -305,17 +311,29 @@ export default function VideosPage() {
                 </div>
               )}
 
-              {/* Embed player */}
-              <div className="w-full bg-black shrink-0" style={{ aspectRatio: "16/9" }}>
-                <iframe
-                  key={selectedVideo.id}
-                  src={selectedEmbedInfo.embedUrl}
-                  className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  onLoad={autoplayNext ? undefined : undefined}
-                />
-              </div>
+              {/* Player — iframe for YouTube/Vimeo, native for direct uploads */}
+              {selectedEmbedInfo.type !== "unknown" ? (
+                <div className="w-full bg-black shrink-0" style={{ aspectRatio: "16/9" }}>
+                  <iframe
+                    key={selectedVideo.id}
+                    src={selectedEmbedInfo.embedUrl}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 bg-black flex items-center justify-center shrink-0">
+                  <video
+                    key={selectedVideo.id}
+                    src={selectedVideo.public_url || ""}
+                    controls
+                    autoPlay
+                    onEnded={handleVideoEnd}
+                    className="w-full max-h-[60vh]"
+                  />
+                </div>
+              )}
 
               {/* Info */}
               <div className="p-6 overflow-y-auto">
@@ -338,49 +356,112 @@ export default function VideosPage() {
   );
 }
 
-// ── Submit Panel (YouTube / Vimeo URL form) ────────────────────────────────
+// ── Submit Panel (Dual mode: Paste Link OR Upload File) ────────────────────
 function SubmitPanel({ onSuccess }: { onSuccess: () => void }) {
+  const [mode, setMode] = useState<"link" | "file">("link");
   const [videoUrl, setVideoUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [uploader, setUploader] = useState("");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const urlInfo = videoUrl ? getEmbedUrl(videoUrl) : null;
   const isValidUrl = urlInfo && urlInfo.type !== "unknown";
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selected = e.target.files[0];
+      if (selected.size > 50 * 1024 * 1024) {
+        setError("File exceeds 50MB limit. Use 'Paste Link' tab for larger videos!");
+        return;
+      }
+      const validTypes = ["video/mp4", "video/webm", "video/quicktime"];
+      if (!validTypes.includes(selected.type)) {
+        setError("Please select a valid video file (MP4, WebM, or MOV).");
+        return;
+      }
+      setFile(selected);
+      setError("");
+      if (!title) setTitle(selected.name.split(".")[0]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!videoUrl || !title || !uploader) {
-      setError("Please fill in all required fields.");
-      return;
-    }
-    if (!isValidUrl) {
-      setError("Please enter a valid YouTube or Vimeo URL.");
-      return;
+    if (!title || !uploader) { setError("Please fill in all required fields."); return; }
+
+    if (mode === "link") {
+      if (!videoUrl) { setError("Please enter a video URL."); return; }
+      if (!isValidUrl) { setError("Please enter a valid YouTube or Vimeo URL."); return; }
+    } else {
+      if (!file) { setError("Please select a video file."); return; }
     }
 
     setIsSubmitting(true);
     setError("");
+    setProgress(0);
 
     try {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
       const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-      const { error: dbError } = await supabase.from("videos").insert([{
-        title,
-        uploader,
-        description,
-        video_url: videoUrl,
-        // These are nullable now; we don't use Supabase Storage anymore
-        storage_path: null,
-        public_url: null,
-      }]);
+      if (mode === "link") {
+        // ── Link mode: just insert metadata ──
+        const { error: dbError } = await supabase.from("videos").insert([{
+          title, uploader, description,
+          video_url: videoUrl,
+          storage_path: null,
+          public_url: null,
+        }]);
+        if (dbError) throw new Error("Failed to save: " + dbError.message);
+      } else {
+        // ── File mode: upload to Supabase Storage, then insert metadata ──
+        const fileExt = file!.name.split(".").pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+        const storagePath = `uploads/${fileName}`;
+        const uploadUrl = `${supabaseUrl}/storage/v1/object/project-videos/${storagePath}`;
 
-      if (dbError) throw new Error("Failed to save video details: " + dbError.message);
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) setProgress(Math.round((event.loaded / event.total) * 95));
+          };
+          xhr.onload = async () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const { data: publicUrlData } = supabase.storage.from("project-videos").getPublicUrl(storagePath);
+                const { error: dbError } = await supabase.from("videos").insert([{
+                  title, uploader, description,
+                  storage_path: storagePath,
+                  public_url: publicUrlData.publicUrl,
+                  video_url: null,
+                }]);
+                if (dbError) throw new Error("Uploaded but failed to save details.");
+                setProgress(100);
+                resolve();
+              } catch (err: any) { reject(new Error(err.message)); }
+            } else {
+              try {
+                const result = JSON.parse(xhr.responseText);
+                reject(new Error(result?.message || result?.error || `Upload failed (${xhr.status})`));
+              } catch { reject(new Error(`Server error (${xhr.status})`)); }
+            }
+          };
+          xhr.onerror = () => reject(new Error("Network error — check your connection."));
+          xhr.timeout = 30 * 60 * 1000;
+          xhr.open("POST", uploadUrl);
+          xhr.setRequestHeader("Authorization", `Bearer ${supabaseAnonKey}`);
+          xhr.setRequestHeader("apikey", supabaseAnonKey);
+          xhr.setRequestHeader("Content-Type", file!.type);
+          xhr.send(file!);
+        });
+      }
 
       setSuccess(true);
       setTimeout(() => onSuccess(), 1500);
@@ -388,6 +469,7 @@ function SubmitPanel({ onSuccess }: { onSuccess: () => void }) {
       const msg = err instanceof Error ? err.message : "An unexpected error occurred.";
       setError(msg);
       setIsSubmitting(false);
+      setProgress(0);
     }
   };
 
@@ -395,168 +477,149 @@ function SubmitPanel({ onSuccess }: { onSuccess: () => void }) {
     <div className="glass p-6 md:p-8 rounded-2xl border-primary/20 bg-primary/5">
       {success ? (
         <div className="py-12 flex flex-col items-center justify-center text-center">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="w-20 h-20 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center mb-6"
-          >
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
+            className="w-20 h-20 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center mb-6">
             <CheckCircle2 size={40} />
           </motion.div>
           <h3 className="text-2xl font-bold mb-2">Video Added!</h3>
           <p className="text-white/60">Your video has been added to the showcase.</p>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-8">
-          {/* URL Input Side */}
-          <div className="flex flex-col gap-4">
-            <div>
-              <label className="block text-sm font-medium text-white/80 mb-1.5">
-                YouTube or Vimeo URL *
-              </label>
-              <div className="relative">
-                <LinkIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-                <input
-                  type="url"
-                  value={videoUrl}
-                  onChange={(e) => { setVideoUrl(e.target.value); setError(""); }}
-                  placeholder="https://youtube.com/watch?v=..."
-                  className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2.5 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-white"
-                  disabled={isSubmitting}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Live preview / validation */}
-            {videoUrl && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`rounded-xl p-4 flex items-start gap-3 ${
-                  isValidUrl
-                    ? "bg-green-500/10 border border-green-500/20"
-                    : "bg-red-500/10 border border-red-500/20"
-                }`}
-              >
-                {isValidUrl ? (
-                  <>
-                    {urlInfo?.type === "youtube" && <Youtube size={18} className="text-red-400 shrink-0 mt-0.5" />}
-                    {urlInfo?.type === "vimeo" && <VideoIcon size={18} className="text-[#1ab7ea] shrink-0 mt-0.5" />}
-                    <div>
-                      <p className="text-sm font-medium text-green-400">Valid {urlInfo?.type === "youtube" ? "YouTube" : "Vimeo"} URL ✓</p>
-                      <p className="text-xs text-white/40 mt-0.5">Video will be embedded directly — no file size limits!</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-red-400">Not a recognized URL</p>
-                      <p className="text-xs text-white/40 mt-0.5">Paste a YouTube or Vimeo link.</p>
-                    </div>
-                  </>
-                )}
-              </motion.div>
-            )}
-
-            {!videoUrl && (
-              <div className="flex-1 min-h-[120px] border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center p-6 text-center bg-black/20 gap-3">
-                <div className="flex gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-red-600/20 flex items-center justify-center">
-                    <Youtube size={20} className="text-red-400" />
-                  </div>
-                  <div className="w-10 h-10 rounded-lg bg-[#1ab7ea]/20 flex items-center justify-center">
-                    <VideoIcon size={20} className="text-[#1ab7ea]" />
-                  </div>
-                </div>
-                <div>
-                  <p className="font-medium text-white/80 text-sm">Paste a YouTube or Vimeo link</p>
-                  <p className="text-xs text-white/40 mt-1">No file size limits — any video length works!</p>
-                </div>
-              </div>
-            )}
-
-            {/* Thumbnail preview */}
-            {isValidUrl && urlInfo?.thumbnailUrl && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="relative aspect-video rounded-xl overflow-hidden border border-white/10"
-              >
-                <img src={urlInfo.thumbnailUrl} alt="Video thumbnail" className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <div className="w-12 h-12 rounded-full bg-primary/80 flex items-center justify-center">
-                    <Play size={20} className="ml-1 text-white" />
-                  </div>
-                </div>
-                <span className="absolute bottom-2 right-2 text-[10px] bg-black/70 text-white/60 px-2 py-0.5 rounded-md">Preview</span>
-              </motion.div>
-            )}
-
-            {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 flex items-start gap-2">
-                <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                <p>{error}</p>
-              </div>
-            )}
+        <>
+          {/* Mode Toggle */}
+          <div className="flex gap-1 mb-6 bg-black/30 p-1 rounded-xl w-fit">
+            <button type="button" onClick={() => { setMode("link"); setError(""); }}
+              className={`px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${mode === "link" ? "bg-primary text-white shadow-lg" : "text-white/50 hover:text-white/80"}`}>
+              <LinkIcon size={15} /> Paste Link
+            </button>
+            <button type="button" onClick={() => { setMode("file"); setError(""); }}
+              className={`px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${mode === "file" ? "bg-primary text-white shadow-lg" : "text-white/50 hover:text-white/80"}`}>
+              <Upload size={15} /> Upload File
+            </button>
           </div>
 
-          {/* Details Side */}
-          <div className="flex flex-col gap-4">
-            <div>
-              <label className="block text-sm font-medium text-white/80 mb-1.5">Video Title *</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Building a fullstack app with Agent Mode"
-                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-white"
-                disabled={isSubmitting}
-                required
-              />
+          <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-8">
+            {/* Left: Source Input */}
+            <div className="flex flex-col gap-4">
+              {mode === "link" ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-white/80 mb-1.5">YouTube or Vimeo URL *</label>
+                    <div className="relative">
+                      <LinkIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                      <input type="url" value={videoUrl} onChange={(e) => { setVideoUrl(e.target.value); setError(""); }}
+                        placeholder="https://youtube.com/watch?v=..." disabled={isSubmitting}
+                        className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2.5 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-white" required />
+                    </div>
+                  </div>
+                  {videoUrl && (
+                    <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+                      className={`rounded-xl p-3 flex items-start gap-3 ${isValidUrl ? "bg-green-500/10 border border-green-500/20" : "bg-red-500/10 border border-red-500/20"}`}>
+                      {isValidUrl ? (
+                        <>
+                          {urlInfo?.type === "youtube" && <PlaySquare size={16} className="text-red-400 shrink-0 mt-0.5" />}
+                          {urlInfo?.type === "vimeo" && <VideoIcon size={16} className="text-[#1ab7ea] shrink-0 mt-0.5" />}
+                          <div>
+                            <p className="text-sm font-medium text-green-400">Valid {urlInfo?.type === "youtube" ? "YouTube" : "Vimeo"} URL ✓</p>
+                            <p className="text-xs text-white/40 mt-0.5">No file size limits!</p>
+                          </div>
+                        </>
+                      ) : (
+                        <><AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                          <p className="text-sm font-medium text-red-400">Not a recognized YouTube/Vimeo URL</p></>
+                      )}
+                    </motion.div>
+                  )}
+                  {isValidUrl && urlInfo?.thumbnailUrl && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative aspect-video rounded-xl overflow-hidden border border-white/10">
+                      <img src={urlInfo.thumbnailUrl} alt="Preview" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-primary/80 flex items-center justify-center"><Play size={20} className="ml-1 text-white" /></div>
+                      </div>
+                    </motion.div>
+                  )}
+                  {!videoUrl && (
+                    <div className="flex-1 min-h-[120px] border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center p-6 text-center bg-black/20 gap-3">
+                      <div className="flex gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-red-600/20 flex items-center justify-center"><PlaySquare size={20} className="text-red-400" /></div>
+                        <div className="w-10 h-10 rounded-lg bg-[#1ab7ea]/20 flex items-center justify-center"><VideoIcon size={20} className="text-[#1ab7ea]" /></div>
+                      </div>
+                      <p className="font-medium text-white/80 text-sm">Paste a YouTube or Vimeo link</p>
+                      <p className="text-xs text-white/40">No file size limits — any length works!</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className={`flex-1 min-h-[200px] border-2 border-dashed rounded-xl flex flex-col items-center justify-center p-8 text-center transition-colors cursor-pointer ${file ? "border-primary/50 bg-primary/5" : "border-white/10 hover:border-white/30 bg-black/20"}`}
+                    onClick={() => fileInputRef.current?.click()}>
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="video/mp4,video/webm,video/quicktime" className="hidden" />
+                    {file ? (
+                      <>
+                        <VideoIcon className="w-12 h-12 text-primary mb-4" />
+                        <p className="font-medium text-white mb-1 truncate max-w-[200px]">{file.name}</p>
+                        <p className="text-sm text-white/50">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+                        <button type="button" className="mt-4 text-sm text-primary hover:text-primary/80" onClick={(ev) => { ev.stopPropagation(); setFile(null); }}>Change file</button>
+                      </>
+                    ) : (
+                      <>
+                        <PlusCircle className="w-12 h-12 text-white/20 mb-4" />
+                        <p className="font-medium text-white mb-1">Click to select video</p>
+                        <p className="text-sm text-white/50">MP4, WebM, MOV up to 50MB</p>
+                        <p className="text-xs text-white/30 mt-2">For larger videos, use the &quot;Paste Link&quot; tab</p>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+              {error && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 flex items-start gap-2">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" /><p>{error}</p>
+                </div>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-white/80 mb-1.5">Your Name *</label>
-              <input
-                type="text"
-                value={uploader}
-                onChange={(e) => setUploader(e.target.value)}
-                placeholder="e.g. Alex Developer"
-                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-white"
-                disabled={isSubmitting}
-                required
-              />
+            {/* Right: Details */}
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-1.5">Video Title *</label>
+                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Building a fullstack app with Agent Mode" disabled={isSubmitting} required
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-white" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-1.5">Your Name *</label>
+                <input type="text" value={uploader} onChange={(e) => setUploader(e.target.value)}
+                  placeholder="e.g. Alex Developer" disabled={isSubmitting} required
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-white" />
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-white/80 mb-1.5">Description (Optional)</label>
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Share some details about what you built..." disabled={isSubmitting}
+                  className="w-full h-full min-h-[100px] bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-white resize-none" />
+              </div>
+              <div className="mt-auto pt-2">
+                <button type="submit"
+                  disabled={(mode === "link" ? (!videoUrl || !isValidUrl) : !file) || !title || !uploader || isSubmitting}
+                  className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/30 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-all flex items-center justify-center gap-2 relative overflow-hidden">
+                  <span className={`flex items-center gap-2 relative z-10 ${isSubmitting && mode === "file" ? "opacity-0" : ""}`}>
+                    {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <PlusCircle size={18} />}
+                    {isSubmitting ? "Adding..." : "Add to Showcase"}
+                  </span>
+                  {isSubmitting && mode === "file" && (
+                    <>
+                      <div className="absolute inset-0 flex items-center justify-center z-10"><span className="text-sm font-medium">Uploading... {progress}%</span></div>
+                      <div className="absolute left-0 top-0 bottom-0 bg-white/20 transition-all duration-300 z-0" style={{ width: `${progress}%` }} />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-white/80 mb-1.5">Description (Optional)</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Share some details about what you built..."
-                className="w-full h-full min-h-[100px] bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-white resize-none"
-                disabled={isSubmitting}
-              />
-            </div>
-
-            <div className="mt-auto pt-2">
-              <button
-                type="submit"
-                disabled={!videoUrl || !title || !uploader || isSubmitting || !isValidUrl}
-                className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/30 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-              >
-                {isSubmitting ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <PlusCircle size={18} />
-                )}
-                {isSubmitting ? "Adding..." : "Add to Showcase"}
-              </button>
-            </div>
-          </div>
-        </form>
+          </form>
+        </>
       )}
     </div>
   );
 }
+
